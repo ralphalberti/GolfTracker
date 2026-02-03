@@ -3,6 +3,7 @@ import sqlite3
 import re
 import json
 import os
+import platform
 import csv # Can remove this if I don't want to use the import feature any longer
 from datetime import date, datetime
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -10,12 +11,13 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QColor, QIntValidator
+from PyQt5.QtCore import Qt, QDate, QPropertyAnimation
+from PyQt5.QtGui import QColor, QIntValidator, QPixmap, QPalette
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox,
-    QDateEdit, QAction, QCompleter, QAbstractItemView, QTabWidget, QComboBox, QFrame, QSizePolicy
+    QDateEdit, QAction, QCompleter, QAbstractItemView, QTabWidget, QComboBox, QFrame, QSizePolicy,
+    QGraphicsOpacityEffect
 )
 
 DB_FILE = "golf_scores.db"
@@ -36,6 +38,27 @@ class GolfTracker(QMainWindow):
 
         self.initUI()
         self.load_data()
+
+        # --- Apply system theme detection AFTER everything is built ---
+        palette = QApplication.instance().palette()
+        is_dark = palette.color(QPalette.Window).value() < 128
+
+        if platform.system() == "Windows":
+            try:
+                import winreg
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                ) as key:
+                    apps_use_light = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                    mode = "dark" if apps_use_light == 0 else "light"
+            except Exception:
+                mode = "dark" if is_dark else "light"
+        else:
+            mode = "dark" if is_dark else "light"
+
+        self.set_theme(mode)
+
 
     def create_table(self):
         cursor = self.conn.cursor()
@@ -115,11 +138,113 @@ class GolfTracker(QMainWindow):
         # --- Restore window size and position
         self.restore_window_settings()
 
+
         # Populate course autocomplete on startup
         try:
             self.refresh_autocomplete()
         except Exception:
             pass
+
+    def set_theme(self, mode: str):
+        """
+        Apply light or dark mode styles to key widgets (table, labels, etc.)
+        """
+        if mode == "dark":
+            bg = "#121212"
+            fg = "#EEEEEE"
+            alt_row = "#D9D9D9"  # clear, medium-light gray for strong contrast
+            grid_color = "#B0B0B0"
+            header_bg = "#1E1E1E"    # dark gray header
+            header_fg = "#EEEEEE"
+            stats_bg = "#2E8B57"     # green footer in dark mode
+            stats_fg = "#FFFFFF"
+        else:
+            bg = "#FFFFFF"
+            fg = "#111111"
+            alt_row = "#E0E0E0"      # more pronounced light gray for alternating rows
+            grid_color = "#BFBFBF"   # darker gridlines for separation
+            header_bg = "#EAEAEA"    # soft gray header
+            header_fg = "#111111"    # dark text for readability
+            # stats_bg = "#3CB371"     # MediumSeaGreen footer for light mode
+            stats_bg = "#2E8B57"     # unified green footer for light mode
+            stats_fg = "#FFFFFF"
+
+        # --- QTableWidget (data grid) ---
+        self.table.setAlternatingRowColors(True)
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {bg};
+                color: {fg};
+                gridline-color: {grid_color};
+                selection-background-color: #3CB371;
+                selection-color: white;
+                border: none;
+            }}
+            QHeaderView::section {{
+                background-color: {header_bg};
+                color: {header_fg};
+                border: 1px solid {grid_color};
+                padding: 4px;
+                font-weight: bold;
+            }}
+        """)
+
+        # --- Stats labels (bottom bars) ---
+        for lbl in (self.stats_label_main, self.stats_label_charts):
+            lbl.setStyleSheet(
+                f"""
+                background-color: {stats_bg};
+                color: {stats_fg};
+                font-size: 14px;
+                padding: 4px 6px;
+                border: 1px solid #B7950B;
+                """
+            )
+        
+    def refresh_stats_bar_style(self):
+        """
+        Reapply the theme style to the stats bar labels
+        after text updates (like clearing filters),
+        but skip if a red (filtered) style is active.
+        """
+        palette = QApplication.instance().palette()
+        is_dark = palette.color(QPalette.Window).value() < 128
+        mode = "dark" if is_dark else "light"
+
+        # Check if any stats label is currently using the red (filtered) style
+        for lbl in (self.stats_label_main, self.stats_label_charts):
+            current_style = lbl.styleSheet().lower()
+            if any(x in current_style for x in ["#b22222", "#ff4444", "background-color: red"]):
+                # One or more labels are red → skip full theme reset
+                return
+
+        # If we reach here, no red styles are active → safe to reapply theme
+        self.set_theme(mode)
+
+    def fade_stats_bar(self, duration=300):
+        """
+        Fade animation for the stats bar labels (smooth transition between color changes).
+        Ensures opacity is restored and animations don't stack.
+        """
+        for lbl in (self.stats_label_main, self.stats_label_charts):
+            # Reuse or create opacity effect
+            effect = lbl.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(lbl)
+                lbl.setGraphicsEffect(effect)
+
+            # Reset opacity before starting animation
+            effect.setOpacity(0.0)
+
+            # Create fade animation
+            anim = QPropertyAnimation(effect, b"opacity", lbl)
+            anim.setDuration(duration)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.start(QPropertyAnimation.DeleteWhenStopped)
+
+            # Store reference to prevent garbage collection
+            lbl._fade_anim = anim
 
     # --- Shared, single filter bar ---
     def create_shared_filter_bar(self):
@@ -416,11 +541,139 @@ class GolfTracker(QMainWindow):
                                  "Export or import CSV files from the File menu.</p>")
 
     def show_about(self):
-        QMessageBox.information(self, "About Golf Tracker",
-                                 "<h3>About Golf Tracker</h3>"
-                                 "<p>Golf Tracker v1.0<br>"
-                                "Developed with PyQt5, SQLite and matplotlib.<br>"
-                                 "Track your golf rounds easily and efficiently.</p>")
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+        from PyQt5.QtGui import QPixmap, QFont
+        from PyQt5.QtCore import Qt
+
+        img_path = os.path.join(os.path.dirname(__file__), "assets", "titleist.png")
+
+        if not os.path.exists(img_path):
+            QMessageBox.warning(self, "Missing Image", f"Could not find image:\n{img_path}")
+            return
+
+        # --- Mode Toggle: "light" or "dark"
+        # mode = "dark"  # change to "dark" if you want dark mode manually
+
+        # --- Auto-detect mode using QPalette and platform hints
+        palette = QApplication.instance().palette()
+        is_dark = palette.color(QPalette.Window).value() < 128
+
+        if platform.system() == "Darwin":  # macOS handles dark mode nicely
+            mode = "dark" if is_dark else "light"
+        elif platform.system() == "Windows":
+            # Try to detect Windows dark mode via registry (optional, requires 'winreg')
+            try:
+                import winreg
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                ) as key:
+                    apps_use_light = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                    mode = "dark" if apps_use_light == 0 else "light"
+            except Exception:
+                mode = "dark" if is_dark else "light"
+        else:
+            # Default heuristic for Linux and others
+            mode = "dark" if is_dark else "light"
+
+        # --- Theme settings
+        if mode == "light":
+            bg_color = "#fdfdfd"
+            text_color = "#222"
+            accent_color = "#2E8B57"
+            button_color = "#2E8B57"
+            button_hover = "#3CB371"
+        else:  # dark mode
+            bg_color = "#202020"
+            text_color = "#ddd"
+            accent_color = "#77DD77"
+            button_color = "#3CB371"
+            button_hover = "#2E8B57"
+
+        # --- Create custom dialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About Golf Tracker")
+        dlg.setModal(True)
+        dlg.setStyleSheet(f"""
+            QDialog {{
+                background-color: {bg_color};
+                border: 2px solid {accent_color};
+                border-radius: 12px;
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QPushButton {{
+                background-color: {button_color};
+                color: white;
+                padding: 6px 16px;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {button_hover};
+            }}
+        """)
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        # --- Image
+        img_label = QLabel()
+        pix = QPixmap(img_path).scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        img_label.setPixmap(pix)
+        img_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(img_label)
+
+        # --- Title
+        title_label = QLabel("Golf Tracker")
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet(f"color: {accent_color};")
+        layout.addWidget(title_label)
+
+        # --- Description
+        desc_label = QLabel(f"""
+            <p style='font-size:13px; color:{text_color}; text-align:center;'>
+            <b>Version:</b> 1.1 (feat/about branch)<br>
+            <b>Framework:</b> PyQt5 + SQLite + Matplotlib
+            </p>
+            <p style='font-size:13px; color:{text_color}; text-align:center;'>
+            Track your rounds, analyze your scores,<br>
+            and enjoy your game with style! 🏌️‍♂️
+            </p>
+        """)
+        desc_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(desc_label)
+
+        # --- OK Button
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(dlg.accept)
+        layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+
+        # --- Center the dialog precisely on the main window
+        if self.isVisible():
+            dlg.adjustSize()  # force Qt to calculate final size before centering
+            parent_rect = self.frameGeometry()
+            dlg_rect = dlg.frameGeometry()
+            center_point = parent_rect.center()
+            dlg_rect.moveCenter(center_point)
+            dlg.move(dlg_rect.topLeft())
+
+        # --- Fade-in animation (subtle 250 ms)
+        effect = QGraphicsOpacityEffect(dlg)
+        dlg.setGraphicsEffect(effect)
+
+        anim = QPropertyAnimation(effect, b"opacity")
+        anim.setDuration(400)                # milliseconds
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.start(QPropertyAnimation.DeleteWhenStopped)
+
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        dlg.exec_()
 
     # --- Autocomplete refresh ---
     def refresh_autocomplete(self):
@@ -606,12 +859,20 @@ class GolfTracker(QMainWindow):
         self.apply_row_highlighting()
         self.update_charts(filter_text)
 
-    # --- Highlighting ---
     def apply_row_highlighting(self):
         row_count = self.table.rowCount()
         if row_count == 0:
             return
 
+        # Detect current mode from palette (light or dark)
+        palette = QApplication.instance().palette()
+        is_dark = palette.color(QPalette.Window).value() < 128
+        mode = "dark" if is_dark else "light"
+
+        # Theme-aware defaults
+        default_fg = QColor("#EEEEEE") if mode == "dark" else QColor("#111111")
+
+        # Gather all scores
         scores = []
         for r in range(row_count):
             item = self.table.item(r, 4)
@@ -640,15 +901,24 @@ class GolfTracker(QMainWindow):
                 item = self.table.item(r, c)
                 if not item:
                     continue
+
+                # --- Manual alternating row base color ---
+                if mode == "dark":
+                    base_bg = QColor("#1E1E1E") if r % 2 else QColor("#121212")
+                else:
+                    base_bg = QColor("#E0E0E0") if r % 2 else QColor("#FFFFFF")
+                base_fg = default_fg
+
+                # --- Apply highlight colors ---
                 if score_val == min_score:
-                    item.setBackground(QColor("#2E8B57"))
+                    item.setBackground(QColor("#2E8B57"))  # green
                     item.setForeground(QColor("#FFFFFF"))
                 elif score_val == max_score:
-                    item.setBackground(QColor("#FF8C00"))
+                    item.setBackground(QColor("#FF8C00"))  # orange
                     item.setForeground(QColor("#FFFFFF"))
                 else:
-                    item.setBackground(QColor("black"))
-                    item.setForeground(QColor("white"))
+                    item.setBackground(base_bg)
+                    item.setForeground(base_fg)
 
     # --- Stats Bar ---
     def update_stats(self, filter_text=None):
@@ -659,9 +929,19 @@ class GolfTracker(QMainWindow):
             "background-color: #3b3636; color: #ffffff; font-size: 14px; "
             "padding: 4px; border: 1px solid #B7950B;"
         )
+        # Theme-aware filtered style
+        palette = QApplication.instance().palette()
+        is_dark = palette.color(QPalette.Window).value() < 128
+        if is_dark:
+            filter_bg = "#B22222"  # dark red (Firebrick)
+            filter_fg = "#FFFFFF"
+        else:
+            filter_bg = "#FF4444"  # bright red for light mode
+            filter_fg = "#FFFFFF"
+
         style_filtered = (
-            "background-color: #8B0000; color: #ffffff; font-size: 14px; "
-            "padding: 4px; border: 1px solid #B7950B;"
+            f"background-color: {filter_bg}; color: {filter_fg}; font-size: 14px; "
+            f"padding: 4px 6px; border: 1px solid #B7950B;"
         )
 
         where_clause = ""
@@ -709,6 +989,10 @@ class GolfTracker(QMainWindow):
         for lbl in (self.stats_label_main, self.stats_label_charts):
             lbl.setText(stats_html)
             lbl.setStyleSheet(style)
+
+        # --- Reapply theme styling and fade in for smooth transition ---
+        self.refresh_stats_bar_style()
+        self.fade_stats_bar(400)  # fade over 400ms
 
     def select_row_by_id(self, record_id):
         """Select and center the row in the table that matches record_id."""
