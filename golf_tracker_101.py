@@ -59,7 +59,6 @@ class GolfTracker(QMainWindow):
 
         self.set_theme(mode)
 
-
     def create_table(self):
         cursor = self.conn.cursor()
         cursor.execute("""
@@ -156,7 +155,7 @@ class GolfTracker(QMainWindow):
             grid_color = "#B0B0B0"
             header_bg = "#1E1E1E"    # dark gray header
             header_fg = "#EEEEEE"
-            stats_bg = "#2E8B57"     # green footer in dark mode
+            stats_bg = "#3b3636"     # dark footer in dark mode
             stats_fg = "#FFFFFF"
         else:
             bg = "#FFFFFF"
@@ -165,9 +164,8 @@ class GolfTracker(QMainWindow):
             grid_color = "#BFBFBF"   # darker gridlines for separation
             header_bg = "#EAEAEA"    # soft gray header
             header_fg = "#111111"    # dark text for readability
-            # stats_bg = "#3CB371"     # MediumSeaGreen footer for light mode
-            stats_bg = "#2E8B57"     # unified green footer for light mode
-            stats_fg = "#FFFFFF"
+            stats_bg = "#FFFFFF"     # light footer in light mode 
+            stats_fg = "#111111"
 
         # --- QTableWidget (data grid) ---
         self.table.setAlternatingRowColors(True)
@@ -1190,7 +1188,6 @@ class GolfTracker(QMainWindow):
             writer.writerow(["Course", "Date", "Cost", "Score"])
             for row in rows:
                 writer.writerow(row[1:])
-
 
     #def apply_chart_theme(self, fig_bg="#d6dbdf", ax_bg="#d6dbdf"):
     def apply_chart_theme(self, fig_bg="#d6dbdf", ax_bg="#d6dbdf"):
