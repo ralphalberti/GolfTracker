@@ -1,46 +1,48 @@
-# Golf Tracker Project
+# GolfTracker
 
-## 📌 Versioning Workflow
+Track golf scores.
 
-This project uses a **manual versioning scheme** (Git-lite) to keep development safe and organized.
+## Description
 
-### 🔑 Files
-- **golf_tracker_gold.py**  
-  The stable "gold standard" baseline. Only updated when explicitly promoted.
+This application let's you keep track of courses played and when played. It also allows you to record your scores and analyze them over time.
 
-- **golf_tracker_XX.py**  
-  Numbered working versions (e.g., `golf_tracker_60.py`, `golf_tracker_61.py`).  
-  Each change increments the version number automatically.
+## Getting Started
 
-- **CHANGELOG.txt**  
-  Records what was added/changed in each version. Updated automatically.
+### Dependencies
 
-- **settings.json**  
-  Stores UI/window preferences.
+* Linux
+* sqlite3
+* matplotlib
+* PyQt5
 
-### 🚀 Workflow
-1. When changes are made, a new file is saved with the next version number.  
-   Example: `golf_tracker_61.py` → `golf_tracker_62.py`.
+### Installing
 
-2. `CHANGELOG.txt` is updated automatically with a template entry for the new version.
+* You can download the program from my github account at https://github.com/ralphalberti/GolfTracker.git
 
-3. To make a version the new baseline:  
-   ```
-   promote vXX to gold
-   ```
-   This copies `golf_tracker_XX.py` to `golf_tracker_gold.py`.
+### Executing program
 
-### 📁 Example Directory
+* Run as a Python script
+* `python3 golf_tracker_101.py`
 ```
-/golf_tracker/
-  ├── golf_tracker_gold.py
-  ├── golf_tracker_60.py
-  ├── golf_tracker_61.py
-  ├── CHANGELOG.txt
-  ├── README.md
-  └── settings.json
+code blocks for commands
 ```
 
----
+## Help
 
-✅ With this setup, you can experiment freely, always knowing you have a **stable gold file** to fall back on.
+There is currently no help included with the program.
+## Authors
+
+Ralph Alberti
+
+## Version History
+
+* 0.1
+    * Initial Release
+
+## License
+
+This project is not currently licensed.
+
+## Acknowledgments
+
+For the love of golf
