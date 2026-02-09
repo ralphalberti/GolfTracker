@@ -6,6 +6,8 @@ Track golf scores.
 
 This application let's you keep track of courses played and when played. It also allows you to record your scores and analyze them over time.
 
+Note: I am using this app to learn git and GitHub
+
 ## Getting Started
 
 ### Dependencies
@@ -22,9 +24,8 @@ This application let's you keep track of courses played and when played. It also
 ### Executing program
 
 * Run as a Python script
-* `python3 golf_tracker_101.py`
 ```
-code blocks for commands
+python3 golf_tracker_101.py
 ```
 
 ## Help
@@ -36,7 +37,7 @@ Ralph Alberti
 
 ## Version History
 
-* 0.1
+* 1.1
     * Initial Release
 
 ## License
